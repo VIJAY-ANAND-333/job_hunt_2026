@@ -1,5 +1,6 @@
 name: Hourly Job Scan
 on:
+  push:
   schedule:
     - cron: '0 */6 * * *' # Runs every 6 hours
   workflow_dispatch: # Allows you to run it manually
@@ -33,7 +34,17 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git pull --rebase origin main  # This prevents the 'rejected' error
+          
+          # Fetch the latest changes from the remote to stay in sync
+          git fetch origin main
+          
+          # Rebase your local changes (the new seen_jobs.txt) on top of remote changes
+          git rebase origin/main
+          
           git add seen_jobs.txt
-          git commit -m "Update seen jobs [skip ci]" || exit 0
+          
+          # Only commit if there are actually changes to avoid 'empty commit' errors
+          git diff --quiet && git diff --staged --quiet || git commit -m "Update seen jobs [skip ci]"
+          
+          # Push the changes
           git push origin main
