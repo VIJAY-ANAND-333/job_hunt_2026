@@ -1,9 +1,15 @@
 name: Hourly Job Scan
 on:
-  push:
   schedule:
-    - cron: '0 */6 * * *' # Runs every 6 hours
-  workflow_dispatch: # Allows you to run it manually
+    # WEEKDAYS: 8 AM to Midnight IST (which is roughly 02:30 to 18:30 UTC)
+    # Runs at the start of every hour from 3:00 UTC to 18:00 UTC
+    - cron: '0 3-18 * * 1-5'
+
+    # WEEKENDS: 12 PM to 1 AM IST (which is roughly 06:30 to 19:30 UTC)
+    # Runs at the start of every hour from 7:00 UTC to 19:00 UTC
+    - cron: '0 7-19 * * 6,0'
+    
+  workflow_dispatch: # Keeps the manual button active
 
 permissions:
   contents: write
