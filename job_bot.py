@@ -7,25 +7,39 @@ ADZUNA_ID = os.getenv('ADZUNA_ID')
 ADZUNA_KEY = os.getenv('ADZUNA_KEY')
 DISCORD_WEBHOOK = os.getenv('DISCORD_WEBHOOK')
 
-def fetch_jobs():
-    # Searching for 'DevOps' in India, sorted by newest
-    url = f"https://api.adzuna.com/v1/api/jobs/in/search/1?app_id={ADZUNA_ID}&app_key={ADZUNA_KEY}&results_per_page=20&what=devops&content-type=application/json"
-    response = requests.get(url).json()
-    return response.get('results', [])
+def fetch_jobs(location):
+    """Fetches the latest DevOps jobs for a specific location."""
+    # Using 'where' parameter for specific locations
+    url = (f"https://api.adzuna.com/v1/api/jobs/in/search/1?"
+           f"app_id={ADZUNA_ID}&app_key={ADZUNA_KEY}&results_per_page=30"
+           f"&what=devops&where={location}&content-type=application/json")
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.json().get('results', [])
+    except Exception as e:
+        print(f"Error fetching jobs for {location}: {e}")
+        return []
 
 def send_to_discord(job):
+    """Sends a formatted alert to your Discord channel."""
     data = {
         "embeds": [{
             "title": f"🚀 New Job: {job['title']}",
-            "description": f"**Company:** {job['company']['display_name']}\n**Location:** {job['location']['display_name']}",
+            "description": (f"**Company:** {job['company']['display_name']}\n"
+                            f"**Location:** {job['location']['display_name']}\n"
+                            f"**Keywords Matched:** AWS, K8s, Cloud"),
             "url": job['redirect_url'],
-            "color": 5814783
+            "color": 5814783  # Nice Blue/Purple color
         }]
     }
     requests.post(DISCORD_WEBHOOK, json=data)
 
 def main():
-    jobs = fetch_jobs()
+    # Targeted locations
+    locations = ['chennai', 'bengaluru', 'remote']
+    # Your preferred tech stack
+    keywords = ['aws', 'kubernetes', 'docker', 'terraform', 'cicd', 'devops', 'cloud']
     
     # Load seen jobs to avoid spam
     if os.path.exists('seen_jobs.txt'):
@@ -35,18 +49,30 @@ def main():
         seen_ids = set()
 
     new_ids = []
-    for job in jobs:
-        if job['id'] not in seen_ids:
-            # Filter for your specific tech stack
-            desc = job['description'].lower()
-            if any(tech in desc for tech in ['aws', 'kubernetes', 'docker', 'terraform']):
-                send_to_discord(job)
-                new_ids.append(job['id'])
+    
+    for loc in locations:
+        print(f"Scanning for roles in: {loc}...")
+        jobs = fetch_jobs(loc)
+        
+        for job in jobs:
+            job_id = str(job['id'])
+            if job_id not in seen_ids:
+                # Combine title and description for a thorough keyword check
+                content = (job.get('title', '') + " " + job.get('description', '')).lower()
+                
+                if any(tech in content for tech in keywords):
+                    send_to_discord(job)
+                    seen_ids.add(job_id)
+                    new_ids.append(job_id)
 
-    # Update seen jobs
-    with open('seen_jobs.txt', 'a') as f:
-        for jid in new_ids:
-            f.write(f"{jid}\n")
+    # Update seen_jobs.txt so we don't alert twice
+    if new_ids:
+        with open('seen_jobs.txt', 'a') as f:
+            for jid in new_ids:
+                f.write(f"{jid}\n")
+        print(f"Successfully found and alerted {len(new_ids)} new jobs.")
+    else:
+        print("No new matching jobs found in this run.")
 
 if __name__ == "__main__":
     main()
