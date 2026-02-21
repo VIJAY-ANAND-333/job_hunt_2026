@@ -43,10 +43,11 @@ def main():
     
     if os.path.exists('seen_jobs.txt'):
         with open('seen_jobs.txt', 'r') as f:
-            seen_ids = set(f.read().splitlines())
+            # strip() removes hidden spaces or newlines that cause mismatch
+            seen_ids = set(line.strip() for line in f if line.strip())
     else:
         seen_ids = set()
-
+        
     new_ids = []
     
     for loc in locations:
