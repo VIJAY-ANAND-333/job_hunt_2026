@@ -9,7 +9,6 @@ DISCORD_WEBHOOK = os.getenv('DISCORD_WEBHOOK')
 
 def fetch_jobs(location):
     """Fetches the latest DevOps jobs for a specific location."""
-    # Using 'where' parameter for specific locations
     url = (f"https://api.adzuna.com/v1/api/jobs/in/search/1?"
            f"app_id={ADZUNA_ID}&app_key={ADZUNA_KEY}&results_per_page=30"
            f"&what=devops&where={location}&content-type=application/json")
@@ -21,27 +20,27 @@ def fetch_jobs(location):
         print(f"Error fetching jobs for {location}: {e}")
         return []
 
-def send_to_discord(job):
-    """Sends a formatted alert to your Discord channel."""
+def send_to_discord(job, matched_keywords):
+    """Sends a formatted alert with the specifically matched keywords."""
+    # Convert list to a readable string (e.g., "AWS, Kubernetes")
+    matches_str = ", ".join([k.upper() for k in matched_keywords])
+    
     data = {
         "embeds": [{
             "title": f"🚀 New Job: {job['title']}",
             "description": (f"**Company:** {job['company']['display_name']}\n"
                             f"**Location:** {job['location']['display_name']}\n"
-                            f"**Keywords Matched:** AWS, K8s, Cloud"),
+                            f"**Matches:** `{matches_str}`"),
             "url": job['redirect_url'],
-            "color": 5814783  # Nice Blue/Purple color
+            "color": 5814783 
         }]
     }
     requests.post(DISCORD_WEBHOOK, json=data)
 
 def main():
-    # Targeted locations
     locations = ['chennai', 'bengaluru', 'remote']
-    # Your preferred tech stack
-    keywords = ['aws', 'kubernetes', 'docker', 'terraform', 'cicd', 'devops', 'cloud']
+    keywords = ['aws', 'kubernetes', 'docker', 'terraform', 'cicd', 'devops', 'cloud', 'datadog', 'ansible']
     
-    # Load seen jobs to avoid spam
     if os.path.exists('seen_jobs.txt'):
         with open('seen_jobs.txt', 'r') as f:
             seen_ids = set(f.read().splitlines())
@@ -51,28 +50,29 @@ def main():
     new_ids = []
     
     for loc in locations:
-        print(f"Scanning for roles in: {loc}...")
+        print(f"Scanning: {loc}...")
         jobs = fetch_jobs(loc)
         
         for job in jobs:
             job_id = str(job['id'])
             if job_id not in seen_ids:
-                # Combine title and description for a thorough keyword check
                 content = (job.get('title', '') + " " + job.get('description', '')).lower()
                 
-                if any(tech in content for tech in keywords):
-                    send_to_discord(job)
+                # Identify which specific keywords matched
+                found_keywords = [k for k in keywords if k in content]
+                
+                if found_keywords:
+                    send_to_discord(job, found_keywords)
                     seen_ids.add(job_id)
                     new_ids.append(job_id)
 
-    # Update seen_jobs.txt so we don't alert twice
     if new_ids:
         with open('seen_jobs.txt', 'a') as f:
             for jid in new_ids:
                 f.write(f"{jid}\n")
-        print(f"Successfully found and alerted {len(new_ids)} new jobs.")
+        print(f"Alerted {len(new_ids)} new jobs.")
     else:
-        print("No new matching jobs found in this run.")
+        print("No new matches.")
 
 if __name__ == "__main__":
     main()
